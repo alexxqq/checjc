@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Floyd-Warshall Task Manager</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+
+<body>
+    <h1>Floyd-Warshall Task Manager</h1>
+
+    <div class="task-input">
+        <form id="task-form" method="POST" action="/submit_task">
+            <label for="matrix_size">Enter matrix size:</label>
+            <input type="number" id="matrix_size" name="matrix_size" required min="1">
+            <button type="submit">Submit Task</button>
+        </form>
+    </div>
+
+    <h2>Task Status</h2>
+    <table id="tasks-table">
+        <thead>
+            <tr>
+                <th>Task ID</th>
+                <th>Matrix Size</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th>Estimated Time</th>
+                <th>Download Report</th>
+                <th>Action</th> <!-- New Action column for Start button -->
+            </tr>
+        </thead>
+        <tbody>
+            {% for task in tasks %}
+            <tr>
+                <td>{{ task.id }}</td>
+                <td>{{ task.matrix_size }}</td>
+                <td>{{ task.status }}</td>
+                <td>
+                    <div class="progress-bar">
+                        <div class="progress" style="width: {{ task.progress }}%;"></div>
+                    </div>
+                    {{ task.progress }}%
+                </td>
+                <td>{{ task.estimated_time }}</td>
+                <td>
+                    {% if task.status == 'completed' %}
+                    <a href="/download_report/{{ task.id }}">Download</a>
+                    {% else %}
+                    N/A
+                    {% endif %}
+                </td>
+                <td>
+                    {% if task.status == 'pending' %}
+                    <button class="start-task" data-task-id="{{ task.id }}">Start</button>
+                    {% else %}
+                    In Progress/Completed
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <script>
+        // Ajax for submitting task
+        document.getElementById('task-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const matrixSize = document.getElementById('matrix_size').value;
+
+            fetch('/submit_task', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ matrix_size: matrixSize }),
+            })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    location.reload();  // Reload page to see the updated task list
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        });
+
+        // Event listener for the Start button
+        document.querySelectorAll('.start-task').forEach(button => {
+            button.addEventListener('click', function () {
+                const taskId = this.getAttribute('data-task-id');
+                
+                fetch('/process_tasks', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ task_id: taskId }),
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        alert(data.message);
+                        location.reload();  // Reload page to see updated task status
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+            });
+        });
+    </script>
+</body>
+
+</html>
