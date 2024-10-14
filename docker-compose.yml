@@ -3,11 +3,23 @@ services:
   flask_server_1:
     build: ../flask_app/app
     ports:
+      - "5001:6999"
+    environment:
+      - FLASK_ENV=dev
+    depends_on:
+      - postgres
+      - migrate
+
+  flask_server_2:
+    build: ../flask_app/app
+    ports:
       - "5002:6999"
     environment:
       - FLASK_ENV=dev
     depends_on:
       - postgres
+      - migrate
+
   nginx:
     image: nginx:latest
     ports:
@@ -26,3 +38,11 @@ services:
     ports:
       - "5439:5432"
 
+  migrate:
+    build: ../flask_app/app
+    command: flask db upgrade  # Run the migration command
+    depends_on:
+      - postgres
+    environment:
+      - FLASK_ENV=dev
+    restart: "no"  # Do not restart after the migration is done

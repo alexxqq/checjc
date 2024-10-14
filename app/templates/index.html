@@ -6,6 +6,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Floyd-Warshall Task Manager</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <style>
+        .progress-bar {
+            width: 100%;
+            background-color: #f3f3f3;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress {
+            height: 20px;
+            background-color: #4caf50;
+            width: 0%; /* This will be dynamically updated */
+            transition: width 0.5s;
+        }
+    </style>
+
 </head>
 
 <body>
@@ -29,20 +45,21 @@
                 <th>Progress</th>
                 <th>Estimated Time</th>
                 <th>Download Report</th>
-                <th>Action</th> <!-- New Action column for Start button -->
+                <th>Action</th>
+                <th>Delete</th>
             </tr>
         </thead>
         <tbody>
             {% for task in tasks %}
-            <tr>
+            <tr data-task-id="{{ task.id }}">
                 <td>{{ task.id }}</td>
                 <td>{{ task.matrix_size }}</td>
-                <td>{{ task.status }}</td>
+                <td class="task-status">{{ task.status }}</td>
                 <td>
                     <div class="progress-bar">
                         <div class="progress" style="width: {{ task.progress }}%;"></div>
                     </div>
-                    {{ task.progress }}%
+                    <span class="progress-text">{{ task.progress }}%</span>
                 </td>
                 <td>{{ task.estimated_time }}</td>
                 <td>
@@ -58,6 +75,9 @@
                     {% else %}
                     In Progress/Completed
                     {% endif %}
+                </td>
+                <td>
+                    <button class="delete-task" data-task-id="{{ task.id }}">Delete</button>
                 </td>
             </tr>
             {% endfor %}
@@ -79,7 +99,6 @@
             })
                 .then(response => response.json())
                 .then(data => {
-                    alert(data.message);
                     location.reload();  // Reload page to see the updated task list
                 })
                 .catch(error => {
@@ -91,8 +110,13 @@
         document.querySelectorAll('.start-task').forEach(button => {
             button.addEventListener('click', function () {
                 const taskId = this.getAttribute('data-task-id');
-                
-                fetch('/process_tasks', {
+                startProgressCheck(taskId); 
+                const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
+            if (row) {
+                const statusCell = row.querySelector('.task-status');
+                statusCell.textContent = 'In Progress';  // Update the status text
+            }
+                fetch(`/process_task/${taskId}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -101,15 +125,81 @@
                 })
                     .then(response => response.json())
                     .then(data => {
-                        alert(data.message);
-                        location.reload();  // Reload page to see updated task status
+                        const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
+                        if (row) {
+                            const statusCell = row.querySelector('.task-status');
+                            statusCell.textContent = 'Completed';  // Update the status text
+
+                            // Update the "Download Report" link
+                            const downloadCell = row.querySelector('td:nth-child(6)'); // Adjust the index if needed
+                            downloadCell.innerHTML = `<a href="/download_report/${taskId}">Download</a>`;
+                        }
                     })
                     .catch(error => {
                         console.error('Error:', error);
                     });
             });
         });
+
+        // Event listener for the Delete button
+        document.querySelectorAll('.delete-task').forEach(button => {
+            button.addEventListener('click', function () {
+                const taskId = this.getAttribute('data-task-id');
+                fetch(`/delete_task/${taskId}`, {
+                    method: 'DELETE',
+                }).then(() => {
+                    location.reload();  // Reload to reflect deletion
+                }).catch(error => {
+                    console.error('Error:', error);
+                });
+            });
+        });
+
+        // Function to start checking progress periodically
+        function startProgressCheck(taskId) {
+            const intervalId = setInterval(() => {
+                fetch(`/get_progress/${taskId}`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`Failed to fetch progress for task ${taskId}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
+
+                        if (row) {
+                            const progressBar = row.querySelector('.progress');  // Target .progress
+                            const progressText = row.querySelector('.progress-text');
+
+                            // Update the progress bar and text
+                            progressBar.style.width = data.progress + '%';
+                            progressText.textContent = data.progress + '%';
+
+                            // Stop checking if progress reaches 100%
+                            if (data.progress >= 100) {
+                                clearInterval(intervalId);
+                            }
+                        } else {
+                            console.error(`No row found for task ${taskId}`);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching progress:', error);
+                        clearInterval(intervalId);  // Stop checking if an error occurs
+                    });
+            }, 3000);  // Check every 3 seconds
+        }
+
+        // Check progress for all tasks when the page loads
+        window.onload = function() {
+            document.querySelectorAll('tr[data-task-id]').forEach(row => {
+                const taskId = row.getAttribute('data-task-id');
+                startProgressCheck(taskId);  // Start progress check on load
+            });
+        };
     </script>
+
 </body>
 
 </html>
