@@ -4,6 +4,8 @@ from models import Task
 import numpy as np
 import os
 import time
+import threading
+lock = threading.Lock()  # Create a global mutex lock
 
 REPORT_DIR = 'reports'  # Directory where reports will be saved
 
@@ -18,27 +20,28 @@ def submit_task():
 
 @app.route('/process_task/<int:task_id>', methods=['POST'])
 def process_task(task_id):
-    task = Task.query.get(task_id)
-    if task and task.status == 'pending':
-        task.status = 'in_progress'
-        db.session.commit()
+    with lock:
+        task = Task.query.get(task_id)
+        if task and task.status == 'pending':
+            task.status = 'in_progress'
+            db.session.commit()
 
-        # Perform the matrix calculation
-        matrix_size = task.matrix_size
-        result = calculate_matrix(matrix_size, task.id)
+            # Perform the matrix calculation
+            matrix_size = task.matrix_size
+            result = calculate_matrix(matrix_size, task.id)
 
-        # Update task status and result
-        task.status = 'completed'
-        task.result = result  # Assuming you have a result field in your Task model
-        
-        # Generate report and save to file
-        report_path = generate_report(task.id, result)
-        task.report_path = report_path
-        db.session.commit()
+            # Update task status and result
+            task.status = 'completed'
+            task.result = result  # Assuming you have a result field in your Task model
+            
+            # Generate report and save to file
+            report_path = generate_report(task.id, result)
+            task.report_path = report_path
+            db.session.commit()
 
-        return jsonify({'message': 'Task has been processed', 'result': result}), 200
+            return jsonify({'message': 'Task has been processed', 'result': result}), 200
 
-    return jsonify({'message': 'Task not found or already processed'}), 404
+        return jsonify({'message': 'Task not found or already processed'}), 404
 
 @app.route('/get_progress/<int:task_id>', methods=['GET'])
 def get_progress_endpoint(task_id):

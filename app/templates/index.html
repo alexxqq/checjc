@@ -17,7 +17,7 @@
         .progress {
             height: 20px;
             background-color: #4caf50;
-            width: 0%; /* This will be dynamically updated */
+            width: 0%;
             transition: width 0.5s;
         }
     </style>
@@ -45,7 +45,6 @@
                 <th>Progress</th>
                 <th>Estimated Time</th>
                 <th>Download Report</th>
-                <th>Action</th>
                 <th>Delete</th>
             </tr>
         </thead>
@@ -70,13 +69,6 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if task.status == 'pending' %}
-                    <button class="start-task" data-task-id="{{ task.id }}">Start</button>
-                    {% else %}
-                    In Progress/Completed
-                    {% endif %}
-                </td>
-                <td>
                     <button class="delete-task" data-task-id="{{ task.id }}">Delete</button>
                 </td>
             </tr>
@@ -89,6 +81,10 @@
         document.getElementById('task-form').addEventListener('submit', function (e) {
             e.preventDefault();
             const matrixSize = document.getElementById('matrix_size').value;
+            if(matrixSize > 1500 || matrixSize <= 0){
+                alert('Ne nagliy');
+                return;
+            }
 
             fetch('/submit_task', {
                 method: 'POST',
@@ -106,55 +102,6 @@
                 });
         });
 
-        // Event listener for the Start button
-        document.querySelectorAll('.start-task').forEach(button => {
-            button.addEventListener('click', function () {
-                const taskId = this.getAttribute('data-task-id');
-                startProgressCheck(taskId); 
-                const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
-            if (row) {
-                const statusCell = row.querySelector('.task-status');
-                statusCell.textContent = 'In Progress';  // Update the status text
-            }
-                fetch(`/process_task/${taskId}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ task_id: taskId }),
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
-                        if (row) {
-                            const statusCell = row.querySelector('.task-status');
-                            statusCell.textContent = 'Completed';  // Update the status text
-
-                            // Update the "Download Report" link
-                            const downloadCell = row.querySelector('td:nth-child(6)'); // Adjust the index if needed
-                            downloadCell.innerHTML = `<a href="/download_report/${taskId}">Download</a>`;
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                    });
-            });
-        });
-
-        // Event listener for the Delete button
-        document.querySelectorAll('.delete-task').forEach(button => {
-            button.addEventListener('click', function () {
-                const taskId = this.getAttribute('data-task-id');
-                fetch(`/delete_task/${taskId}`, {
-                    method: 'DELETE',
-                }).then(() => {
-                    location.reload();  // Reload to reflect deletion
-                }).catch(error => {
-                    console.error('Error:', error);
-                });
-            });
-        });
-
         // Function to start checking progress periodically
         function startProgressCheck(taskId) {
             const intervalId = setInterval(() => {
@@ -169,7 +116,7 @@
                         const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
 
                         if (row) {
-                            const progressBar = row.querySelector('.progress');  // Target .progress
+                            const progressBar = row.querySelector('.progress');
                             const progressText = row.querySelector('.progress-text');
 
                             // Update the progress bar and text
@@ -191,11 +138,72 @@
             }, 3000);  // Check every 3 seconds
         }
 
-        // Check progress for all tasks when the page loads
+        // Automatically start task processing on page load
+        function startTask(taskId) {
+            startProgressCheck(taskId); 
+
+            fetch(`/process_task/${taskId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ task_id: taskId }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
+                if (row) {
+                    const statusCell = row.querySelector('.task-status');
+                    statusCell.textContent = 'Completed';  // Update the status text
+
+                    // Update the "Download Report" link
+                    const downloadCell = row.querySelector('td:nth-child(6)'); // Adjust the index if needed
+                    downloadCell.innerHTML = `<a href="/download_report/${taskId}">Download</a>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+        document.querySelectorAll('.delete-task').forEach(button => {
+        button.addEventListener('click', function () {
+            const taskId = this.getAttribute('data-task-id');
+            deleteTask(taskId);
+        });
+    });
+        function deleteTask(taskId) {
+        fetch(`/delete_task/${taskId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        })
+        .then(response => {
+            if (response.ok) {
+                // Remove the task row from the table
+                const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
+                if (row) {
+                    row.remove();
+                }
+            } else {
+                throw new Error('Failed to delete task');
+            }
+        })
+        .catch(error => {
+            console.error('Error deleting task:', error);
+        });
+    }
+        // Start tasks automatically on page load
         window.onload = function() {
             document.querySelectorAll('tr[data-task-id]').forEach(row => {
                 const taskId = row.getAttribute('data-task-id');
-                startProgressCheck(taskId);  // Start progress check on load
+                const status = row.querySelector('.task-status').textContent;
+
+                if (status === 'pending') {
+                    startTask(taskId);  // Automatically start pending tasks
+                }
+
+                startProgressCheck(taskId);  // Check progress for all tasks
             });
         };
     </script>
